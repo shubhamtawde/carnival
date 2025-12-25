@@ -1,10 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trophy, PartyPopper } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Trophy, PartyPopper, ArrowLeft } from "lucide-react";
 import { useWebSocket } from "@/lib/useWebSocket";
+import { useLocation } from "wouter";
 import type { Player } from "@shared/schema";
 
 export default function Leaderboard() {
+  const [, setLocation] = useLocation();
   useWebSocket();
 
   const { data: topPlayers = [], isLoading } = useQuery<Player[]>({
@@ -29,10 +32,22 @@ export default function Leaderboard() {
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 bg-background border-b px-4 py-4">
-        <div className="flex items-center justify-center gap-3 max-w-4xl mx-auto">
-          <PartyPopper className="w-8 h-8 text-primary" />
-          <h1 className="text-2xl font-bold">Carnival Leaderboard</h1>
-          <Trophy className="w-8 h-8 text-amber-500" />
+        <div className="flex items-center justify-between gap-3 max-w-4xl mx-auto">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setLocation("/")}
+            className="flex-shrink-0"
+            data-testid="button-back"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </Button>
+          <div className="flex items-center justify-center gap-3 flex-1">
+            <PartyPopper className="w-8 h-8 text-primary" />
+            <h1 className="text-2xl font-bold">Carnival Leaderboard</h1>
+            <Trophy className="w-8 h-8 text-amber-500" />
+          </div>
+          <div className="w-10 flex-shrink-0" />
         </div>
       </header>
 

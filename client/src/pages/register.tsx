@@ -13,12 +13,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, UserPlus, Check, PartyPopper, Trash2 } from "lucide-react";
+import { Plus, Pencil, UserPlus, Check, PartyPopper, Trash2, ArrowLeft } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useWebSocket } from "@/lib/useWebSocket";
+import { useLocation } from "wouter";
 import type { Player } from "@shared/schema";
 
 export default function Register() {
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [newPlayerName, setNewPlayerName] = useState("");
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
@@ -90,6 +92,14 @@ export default function Register() {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 bg-background border-b px-4 py-3">
         <div className="flex items-center gap-2 max-w-2xl mx-auto">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setLocation("/")}
+            data-testid="button-back"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
           <PartyPopper className="w-7 h-7 text-primary" />
           <h1 className="text-xl font-bold">Registration Desk</h1>
         </div>
