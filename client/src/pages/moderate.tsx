@@ -47,9 +47,11 @@ export default function Moderate() {
     queryKey: ["/api/players"],
   });
 
-  const { data: recentLogs = [] } = useQuery<ScoreLogWithPlayer[]>({
+  const { data: recentLogs = [], refetch: refetchRecentLogs } = useQuery<ScoreLogWithPlayer[]>({
     queryKey: ["/api/scores/recent"],
     enabled: showUndoDialog,
+    refetchOnMount: 'always',
+    staleTime: 0,
   });
 
   const addScoreMutation = useMutation({
@@ -59,6 +61,7 @@ export default function Moderate() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/players"] });
       queryClient.invalidateQueries({ queryKey: ["/api/leaderboard"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/scores/recent"] });
       toast({
         title: "Score Recorded!",
         description: `${parseInt(points) >= 0 ? "+" : ""}${points} points for ${selectedPlayer?.name}`,
@@ -170,7 +173,10 @@ export default function Moderate() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setShowUndoDialog(true)}
+            onClick={() => {
+              setShowUndoDialog(true);
+              refetchRecentLogs();
+            }}
             data-testid="button-undo"
           >
             <Undo2 className="w-4 h-4 mr-1" />
