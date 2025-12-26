@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,12 +15,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Search, Award, Sparkles, X, Undo2, PartyPopper, ArrowLeft } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useWebSocket } from "@/lib/useWebSocket";
 import { useLocation } from "wouter";
-import type { Player } from "@shared/schema";
+import type { Player, ScoreLogWithPlayer } from "@shared/schema";
 
 export default function Moderate() {
   const [, setLocation] = useLocation();
@@ -29,12 +37,19 @@ export default function Moderate() {
   const [points, setPoints] = useState("");
   const [note, setNote] = useState("");
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showUndoDialog, setShowUndoDialog] = useState(false);
+  const [selectedLogToUndo, setSelectedLogToUndo] = useState<ScoreLogWithPlayer | null>(null);
   const [showUndoConfirm, setShowUndoConfirm] = useState(false);
 
   useWebSocket();
 
   const { data: players = [] } = useQuery<Player[]>({
     queryKey: ["/api/players"],
+  });
+
+  const { data: recentLogs = [] } = useQuery<ScoreLogWithPlayer[]>({
+    queryKey: ["/api/scores/recent"],
+    enabled: showUndoDialog,
   });
 
   const addScoreMutation = useMutation({
@@ -59,14 +74,17 @@ export default function Moderate() {
   });
 
   const undoMutation = useMutation({
-    mutationFn: async () => {
-      return await apiRequest("POST", "/api/scores/undo", {});
+    mutationFn: async (logId?: number) => {
+      return await apiRequest("POST", "/api/scores/undo", logId ? { logId } : {});
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/players"] });
       queryClient.invalidateQueries({ queryKey: ["/api/leaderboard"] });
-      toast({ title: "Undone!", description: "Last score entry has been reversed" });
+      queryClient.invalidateQueries({ queryKey: ["/api/scores/recent"] });
+      toast({ title: "Undone!", description: "Score entry has been reversed" });
       setShowUndoConfirm(false);
+      setShowUndoDialog(false);
+      setSelectedLogToUndo(null);
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -100,6 +118,39 @@ export default function Moderate() {
     p.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleUndoClick = (log: ScoreLogWithPlayer) => {
+    setSelectedLogToUndo(log);
+    setShowUndoDialog(false);
+    setShowUndoConfirm(true);
+  };
+
+  const confirmUndo = () => {
+    if (selectedLogToUndo) {
+      undoMutation.mutate(selectedLogToUndo.id);
+    }
+  };
+
+  const formatDate = (timestamp: number) => {
+    const date = new Date(timestamp * 1000);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    
+    return date.toLocaleDateString("en-US", { 
+      month: "short", 
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit"
+    });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 bg-background border-b px-4 py-3">
@@ -119,7 +170,7 @@ export default function Moderate() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setShowUndoConfirm(true)}
+            onClick={() => setShowUndoDialog(true)}
             data-testid="button-undo"
           >
             <Undo2 className="w-4 h-4 mr-1" />
@@ -253,19 +304,80 @@ export default function Moderate() {
       <AlertDialog open={showUndoConfirm} onOpenChange={setShowUndoConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Undo Last Entry?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will reverse the most recent score entry globally.
+            <AlertDialogTitle>Undo This Entry?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              {selectedLogToUndo && (
+                <>
+                  <p>You are about to undo:</p>
+                  <div className="bg-muted p-3 rounded-lg space-y-1">
+                    <p className="font-semibold text-foreground">{selectedLogToUndo.playerName}</p>
+                    <p className="text-xl font-bold text-foreground">
+                      {selectedLogToUndo.points >= 0 ? "+" : ""}{selectedLogToUndo.points} points
+                    </p>
+                    {selectedLogToUndo.note && (
+                      <p className="text-sm text-muted-foreground">Note: {selectedLogToUndo.note}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">{formatDate(selectedLogToUndo.timestamp)}</p>
+                  </div>
+                  <p className="text-sm">This will reverse the points awarded.</p>
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => undoMutation.mutate()} data-testid="button-confirm-undo">
+            <AlertDialogAction onClick={confirmUndo} data-testid="button-confirm-undo">
               Undo Entry
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={showUndoDialog} onOpenChange={setShowUndoDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Select Entry to Undo</DialogTitle>
+            <DialogDescription>
+              Choose a score entry to reverse. Recent entries are shown first.
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="h-[60vh] pr-4">
+            {recentLogs.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No recent entries found
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {recentLogs.map((log) => (
+                  <button
+                    key={log.id}
+                    onClick={() => handleUndoClick(log)}
+                    className="w-full text-left p-4 rounded-lg border bg-card hover:bg-accent transition-colors"
+                    data-testid={`button-undo-log-${log.id}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm truncate">{log.playerName}</p>
+                        <p className={`text-lg font-bold ${log.points >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                          {log.points >= 0 ? "+" : ""}{log.points} pts
+                        </p>
+                        {log.note && (
+                          <p className="text-sm text-muted-foreground truncate mt-1">
+                            {log.note}
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground whitespace-nowrap">
+                        {formatDate(log.timestamp)}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

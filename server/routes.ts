@@ -119,19 +119,43 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/scores/undo", async (_req, res) => {
+  app.post("/api/scores/undo", async (req, res) => {
     try {
-      const lastLog = await storage.getLastScoreLog();
-      if (!lastLog) {
-        return res.status(404).json({ error: "No score entry to undo" });
+      const { logId } = req.body;
+      
+      let logToUndo: any;
+      
+      if (logId) {
+        // Undo a specific log
+        logToUndo = await storage.getScoreLog(logId);
+        if (!logToUndo) {
+          return res.status(404).json({ error: "Score entry not found" });
+        }
+      } else {
+        // Undo the last log (backward compatibility)
+        logToUndo = await storage.getLastScoreLog();
+        if (!logToUndo) {
+          return res.status(404).json({ error: "No score entry to undo" });
+        }
       }
-      await storage.updatePlayerPoints(lastLog.playerId, -lastLog.points);
-      await storage.deleteScoreLog(lastLog.id);
-      const updatedPlayer = await storage.getPlayer(lastLog.playerId);
-      broadcast("score_undone", { scoreLog: lastLog, player: updatedPlayer });
-      res.json({ undone: lastLog, player: updatedPlayer });
+      
+      await storage.updatePlayerPoints(logToUndo.playerId, -logToUndo.points);
+      await storage.deleteScoreLog(logToUndo.id);
+      const updatedPlayer = await storage.getPlayer(logToUndo.playerId);
+      broadcast("score_undone", { scoreLog: logToUndo, player: updatedPlayer });
+      res.json({ undone: logToUndo, player: updatedPlayer });
     } catch (error) {
       res.status(500).json({ error: "Failed to undo score" });
+    }
+  });
+
+  app.get("/api/scores/recent", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 25;
+      const logs = await storage.getRecentScoreLogs(Math.min(limit, 50));
+      res.json(logs);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch recent scores" });
     }
   });
 

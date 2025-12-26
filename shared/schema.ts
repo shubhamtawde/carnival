@@ -42,3 +42,4 @@ export type Player = typeof players.$inferSelect;
 export type InsertPlayer = z.infer<typeof insertPlayerSchema>;
 export type ScoreLog = typeof scoreLogs.$inferSelect;
 export type InsertScoreLog = z.infer<typeof insertScoreLogSchema>;
+export type ScoreLogWithPlayer = ScoreLog & { playerName: string };

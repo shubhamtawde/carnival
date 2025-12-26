@@ -14,8 +14,10 @@ export interface IStorage {
   
   createScoreLog(data: InsertScoreLog): Promise<ScoreLog>;
   getLastScoreLog(): Promise<ScoreLog | undefined>;
+  getRecentScoreLogs(limit?: number): Promise<Array<ScoreLog & { playerName: string }>>;
   deleteScoreLog(id: number): Promise<void>;
   updatePlayerPoints(playerId: number, pointsDelta: number): Promise<void>;
+  getScoreLog(id: number): Promise<ScoreLog | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -63,6 +65,28 @@ export class DatabaseStorage implements IStorage {
 
   async getLastScoreLog(): Promise<ScoreLog | undefined> {
     const [log] = await db.select().from(scoreLogs).orderBy(desc(scoreLogs.timestamp), desc(scoreLogs.id)).limit(1);
+    return log || undefined;
+  }
+
+  async getRecentScoreLogs(limit: number = 25): Promise<Array<ScoreLog & { playerName: string }>> {
+    const logs = await db
+      .select({
+        id: scoreLogs.id,
+        playerId: scoreLogs.playerId,
+        points: scoreLogs.points,
+        note: scoreLogs.note,
+        timestamp: scoreLogs.timestamp,
+        playerName: players.name,
+      })
+      .from(scoreLogs)
+      .innerJoin(players, eq(scoreLogs.playerId, players.id))
+      .orderBy(desc(scoreLogs.timestamp), desc(scoreLogs.id))
+      .limit(limit);
+    return logs;
+  }
+
+  async getScoreLog(id: number): Promise<ScoreLog | undefined> {
+    const [log] = await db.select().from(scoreLogs).where(eq(scoreLogs.id, id));
     return log || undefined;
   }
 
